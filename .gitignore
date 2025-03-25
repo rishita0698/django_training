@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+venv/
+
+# Ignore configuration file
+config.ini
