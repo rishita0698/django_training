@@ -67,7 +67,7 @@ class UserTests(APITestCase):
     def test_get_user_details_unauthenticated(self):
         """Test for unauthorized user access"""
         response = self.client.get(self.me_url)
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_update_user_details(self):
         """Test for update user profile"""

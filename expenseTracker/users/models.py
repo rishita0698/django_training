@@ -27,6 +27,7 @@ class CustomUserManager(BaseUserManager):
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     """Creating the Custom user instaed of provided django user"""
     email = models.EmailField(unique=True)
+    id = models.AutoField(primary_key=True)
     first_name = models.CharField(max_length=30, blank=True)
     last_name = models.CharField(max_length=30, blank=True)
     is_active = models.BooleanField(default=True)

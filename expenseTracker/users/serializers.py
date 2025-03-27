@@ -2,6 +2,7 @@
 
 from rest_framework import serializers
 from .models import CustomUser
+from django.contrib.auth import authenticate
 
 class CustomUserSerializer(serializers.ModelSerializer):
     """serializer for the user object"""
@@ -26,6 +27,17 @@ class UserSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = ['id', 'email', 'first_name', 'last_name']
         read_only_fields = ['id', 'email']  # Make 'id' and 'email' read-only
+
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, data):
+        user = authenticate(**data)
+        if user and user.is_active:
+            return user
+        raise serializers.ValidationError("Invalid credentials")
         
 
 class PasswordChangeSerializer(serializers.Serializer):

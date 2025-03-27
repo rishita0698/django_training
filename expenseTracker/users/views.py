@@ -1,13 +1,12 @@
 # users/views.py
 
 from rest_framework import generics, permissions
-from rest_framework.views import APIView
-from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView,TokenObtainPairView
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 from .models import CustomUser
-from .serializers import CustomUserSerializer,PasswordChangeSerializer, UserSerializer
+from .serializers import CustomUserSerializer,PasswordChangeSerializer, UserSerializer,LoginSerializer
 
 class RegisterView(generics.CreateAPIView):
     """create a new user in the system"""
@@ -15,9 +14,28 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = (permissions.AllowAny,)
     serializer_class = CustomUserSerializer
 
-class LoginView(TokenObtainPairView):
-    """Login an existing user in the system"""
+# class LoginView(TokenObtainPairView):
+#     """Login an existing user in the system"""
+#     permission_classes = (permissions.AllowAny,)
+
+class LoginView(generics.GenericAPIView):
+    serializer_class = LoginSerializer
     permission_classes = (permissions.AllowAny,)
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data
+        refresh = RefreshToken.for_user(user)
+        custom_data = {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'id':user.id,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+        }
+        return Response(custom_data, status=status.HTTP_200_OK)
 
 class CustomTokenRefreshView(TokenRefreshView):
     """Creating a new access token from refresh token"""
