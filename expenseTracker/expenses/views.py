@@ -1,30 +1,16 @@
 from django.shortcuts import render
 
 # Create your views here.
-from .serializers import OccasionSerializer
-from .models import Occasion
+from .serializers import OccasionSerializer,EventSerializer, PaymentSerializer,EventUtilizerSerializer
+from .models import Occasion, Event, Utlizers, Payment
 from rest_framework import viewsets, permissions, status
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
-from users.models import CustomUser
 from django.shortcuts import get_object_or_404
-
-# class OccasionManagementView(viewsets.ModelViewSet):
-#     serializer_class = [OccasionSerializer,]
-#     permission_classes = [permissions.IsAuthenticated,]
-    
-
-#     def get_queryset(self):
-#         import json
-#         print("user", self.request.user.id)
-#         # user_detail = CustomUser.objects.filter(email = self.request.user).values()
-#         return Occasion.objects.filter(created_by = self.request.user.id)
-    
-
-#     # def perform_create(self, serializer):
-#     #     return serializer.save(created_by = self.request.user.id)
-
+from rest_framework.decorators import action
+from django.db.models import Sum
+from users.models import CustomUser
 
 class OccasionManagementView(viewsets.ViewSet):
     """View for Managing Occassion related operation respect to the user"""
@@ -50,10 +36,10 @@ class OccasionManagementView(viewsets.ViewSet):
         return Response(serializer.errors, status = status. HTTP_400_BAD_REQUEST)
     
 
-    def retrieve(self, request, pk=None):
-        occasions = get_object_or_404(Occasion, pk=pk, created_by = request.user)
-        serializer = OccasionSerializer(occasions)
-        return Response (serializer.data)
+    # def retrieve(self, request, pk=None):
+    #     occasions = get_object_or_404(Occasion, pk=pk, created_by = request.user)
+    #     serializer = OccasionSerializer(occasions)
+    #     return Response (serializer.data)
     
     @swagger_auto_schema(
             request_body=OccasionSerializer,
@@ -67,10 +53,267 @@ class OccasionManagementView(viewsets.ViewSet):
             return Response(serializer.data)
         return Response(serializer.errors, status = status.HTTP_400_BAD_REQUEST)
     
-
     def destroy(self, request, pk=None):
         occasions = get_object_or_404(Occasion, pk=pk, created_by = request.user)
         occasions.delete()
         return Response({"message":"occassion deleted successfully"}, status = status.HTTP_204_NO_CONTENT)
 
+    def retrieve(self, request, pk=None):
+        """list all the events within an occassion"""
+        try:
+            occasion = Occasion.objects.get(pk=pk)
+        except Occasion.DoesNotExist:
+            return Response({'error': 'Occasion not found'}, status=status.HTTP_404_NOT_FOUND)
         
+        events = Event.objects.filter(occasion=occasion)
+        event_data = []
+        total_expenditure = 0
+
+        for event in events:
+            utilizer_details = Utlizers.objects.filter(event = event).values("utlizer__id","utlizer__email", "amount")
+            print("utilizer_details",utilizer_details)
+            event_data.append(
+                {
+                    "event_id":event.id,
+                    "event_name":event.name,
+                    "total_spent":event.total_amount,
+                    'expender':event.expender.email,
+                    'utilizer_details':list(utilizer_details)
+                }
+            )
+
+            total_expenditure = total_expenditure+event.total_amount
+
+        return Response(
+            {
+                'id':occasion.id,
+                'occassion_name':occasion.name,
+                'total_expenditure':total_expenditure,
+                "events":event_data
+            }
+        )
+
+
+class EventViewSet(viewsets.ViewSet):
+    """View for Managing Event Expenditure"""
+
+    permission_classes = [permissions.IsAuthenticated,]
+
+    def list(self, request):
+        events = Event.objects.all()
+        serializer = EventSerializer(events, many=True)
+        return Response(serializer.data)
+
+
+    @swagger_auto_schema(
+            request_body=EventUtilizerSerializer,
+            responses={200:OccasionSerializer()}
+    )
+    def create(self, request):
+        occasion_id = request.data.get('occasion')
+        name = request.data.get('name')
+        expender = request.data.get('expender')
+        total_amount = request.data.get('total_amount')
+        utilizers_data = request.data.get('utilizers_data')
+        if occasion_id:
+            try:
+                occasions = Occasion.objects.get(id = occasion_id)
+                print("occasions",occasions)
+            except Occasion.DoesNotExist:
+                return Response({'error': 'Occasion not found'}, status=status.HTTP_404_NOT_FOUND)
+            request.data['occasion'] = occasion_id
+
+        try:
+            expender = CustomUser.objects.get(id = expender)
+        except CustomUser.DoesNotExist:
+            return Response({'error': 'Expender not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        total_utilizer_amount = sum(int(utilizer["amount"]) for utilizer in utilizers_data)
+      
+        if total_utilizer_amount > int(total_amount):
+            return Response({"error":"Total shared amount more than total"}, status = status.HTTP_400_BAD_REQUEST)
+
+        event = Event.objects.create(
+            name = name,
+            occasion = occasions,
+            created_by = request.user,
+            expender = expender,
+            total_amount = total_amount
+        )
+        
+        print("event========>", event)
+        created_utilizers = []
+        for utilizer_user in utilizers_data:
+            user_id = utilizer_user.get('utlizer')
+            user_amount = utilizer_user.get('amount')
+            try:
+                user = CustomUser.objects.get(id=user_id)
+            except CustomUser.DoesNotExist:
+                return Response({"error":f"User with {user_id} not found"}, status = status.HTTP_404_NOT_FOUND)
+
+            utilizer = Utlizers.objects.create(event=event, utlizer=user, amount=user_amount)
+            created_utilizers.append(utilizer)
+        return Response({
+            "message":"Event with Expenditure created successfully",
+            "data":{
+                "id":event.id,
+                "name":event.name,
+                "occassion":event.occasion.id,
+                "total_amount":event.total_amount,
+                "expender":expender.id,
+                "utilizers":utilizers_data
+            },
+        }, status=status.HTTP_200_OK)
+
+    def retrieve(self, request, pk=None):
+        """list all the participants within an Event"""
+        try:
+            event = Event.objects.get(pk=pk)
+        except Event.DoesNotExist:
+            return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        utilizers = Utlizers.objects.filter(event = event).values_list("utlizer__email", flat = True)
+        participants = list(set([event.expender.email] + list(utilizers)))
+        print("event", event.name)
+        try:
+            print(event.occasion)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+        return Response(
+            {
+                "name":event.name,
+                "occassion":event.occasion.id,
+                "expender":event.expender.id,
+                "total_amount":event.total_amount,
+                "participants":participants
+            }
+        )
+
+
+    @swagger_auto_schema(
+            request_body=EventUtilizerSerializer,
+            responses={200:OccasionSerializer()}
+    )
+    def update(self, request, pk=None):
+        occasion_id = request.data.get('occasion')
+        print("occasion_id",occasion_id)
+        name = request.data.get('name')
+        expender = request.data.get('expender')
+        total_amount = request.data.get('total_amount')
+        utilizers_data = request.data.get('utilizers_data')
+        try:
+            event = Event.objects.get(pk=pk)
+        except Event.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        
+        if occasion_id:
+            try:
+                occasion = Occasion.objects.get(pk=occasion_id)
+            except Occasion.DoesNotExist:
+                return Response({'error': 'Occasion not found'}, status=status.HTTP_404_NOT_FOUND)
+            request.data['occasion'] = occasion_id
+
+        try:
+            expender = CustomUser.objects.get(id = expender)
+        except CustomUser.DoesNotExist:
+            return Response({'error': 'Expender not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        total_utilizer_amount = sum(int(utilizer["amount"]) for utilizer in utilizers_data)
+        if total_utilizer_amount > int(total_amount):
+            return Response({"error": "Total shared amount more than total"}, status=status.HTTP_400_BAD_REQUEST)
+
+        event.name = name
+        event.total_amount = total_amount
+        event.expender = expender
+        event.save()
+
+        if utilizers_data:
+            # Clear existing utilizers
+            Utlizers.objects.filter(event=event).delete()
+
+            # Create new utilizers
+            created_utilizers = []
+            for utilizer_user in utilizers_data:
+                user_id = utilizer_user.get('utlizer')
+                user_amount = utilizer_user.get('amount')
+                try:
+                    user = CustomUser.objects.get(id=user_id)
+                except CustomUser.DoesNotExist:
+                    return Response({"error": f"User with {user_id} not found"}, status=status.HTTP_404_NOT_FOUND)
+
+                utilizer = Utlizers.objects.create(event=event, utlizer=user, amount=user_amount)
+                created_utilizers.append(utilizer)
+
+
+        return Response({
+            "message": "Event with Expenditure updated successfully",
+            "data": request.data,
+        }, status=status.HTTP_200_OK)
+
+    def destroy(self, request, pk=None):
+        try:
+            event = Event.objects.get(pk=pk)
+        except Event.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        event.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+
+class PaymentViewSet(viewsets.ViewSet):
+    """View for clearing payment of a user related to an event"""
+
+    @swagger_auto_schema(
+            request_body=PaymentSerializer,
+            responses={200:OccasionSerializer()}
+    )
+    @action(detail=False, methods=['post'])
+    def clear_expense(self, request,pk=None):
+        """clear all the expense"""
+        payer_id = request.data.get('payer')
+        payee_id = request.data.get('payee')
+        event_id = request.data.get('event')
+        amount = request.data.get('amount')
+
+
+        if not all([payer_id,payee_id,event_id,amount]):
+            return Response ({"error":"Missing Required Fields"}, status = status.HTTP_400_BAD_REQUEST)
+        
+
+        try:
+            event = Event.objects.get(id = event_id)
+        except Event.DoesNotExist:
+            return Response({"error":"Event not found"}, status = status.HTTP_404_NOT_FOUND)
+        
+
+        try:
+            utilizer = Utlizers.objects.get(event = event, utlizer = payee_id)
+        except Utlizers.DoesNotExist:
+            return Response({"error":"Payer was not part of Event"}, status = status.HTTP_404_NOT_FOUND)
+
+
+        total_due = Utlizers.objects.filter(event = event, utlizer_id = payee_id).aggregate(total = Sum('amount'))['total'] or 0
+        total_paid = Payment.objects.filter(event = event, payer_id = payer_id,payee_id = payee_id).aggregate(total = Sum('amount'))['total'] or 0
+
+
+        balance_due = total_due - total_paid
+
+        if balance_due <= 0 :
+            return Response({"error":"No outstanding balance for this user to clear"}, status = status.HTTP_400_BAD_REQUEST)
+        
+        if int(amount) > balance_due:
+            return Response({"error":"Payment Exceed"}, status = status.HTTP_400_BAD_REQUEST) 
+        
+
+        payment = Payment.objects.create(
+            payer_id = payer_id,
+            payee_id = payee_id,
+            event = event,
+            amount = amount
+        )
+
+
+        serializer = PaymentSerializer(payment)
+
+        return Response({"message":"Payment Recorded Successfully","data":serializer.data},status = status.HTTP_200_OK)

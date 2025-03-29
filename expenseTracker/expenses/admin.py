@@ -1,6 +1,6 @@
 from django.contrib import admin
 # Register your models here.
-from .models import Occasion
+from .models import Occasion,Event,Utlizers, Payment
 
 class OccassionAdmin(admin.ModelAdmin):
     """define the admin pages for Occassions"""
@@ -8,3 +8,6 @@ class OccassionAdmin(admin.ModelAdmin):
     search_fields = ('name','created_on',)
 
 admin.site.register(Occasion, OccassionAdmin)
+admin.site.register(Event)
+admin.site.register(Utlizers)
+admin.site.register(Payment)
