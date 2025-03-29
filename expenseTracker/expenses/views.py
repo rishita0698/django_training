@@ -55,6 +55,10 @@ class OccasionManagementView(viewsets.ViewSet):
     
     def destroy(self, request, pk=None):
         occasions = get_object_or_404(Occasion, pk=pk, created_by = request.user)
+        if occasions:
+            events = Event.objects.filter(occasion=occasions)
+            for event in events:
+                event.delete()
         occasions.delete()
         return Response({"message":"occassion deleted successfully"}, status = status.HTTP_204_NO_CONTENT)
 
@@ -117,11 +121,12 @@ class EventViewSet(viewsets.ViewSet):
         utilizers_data = request.data.get('utilizers_data')
         if occasion_id:
             try:
-                occasions = Occasion.objects.get(id = occasion_id)
-                print("occasions",occasions)
+                occasion = Occasion.objects.get(id = occasion_id)
             except Occasion.DoesNotExist:
                 return Response({'error': 'Occasion not found'}, status=status.HTTP_404_NOT_FOUND)
             request.data['occasion'] = occasion_id
+        else:
+            occasion = None
 
         try:
             expender = CustomUser.objects.get(id = expender)
@@ -133,9 +138,10 @@ class EventViewSet(viewsets.ViewSet):
         if total_utilizer_amount > int(total_amount):
             return Response({"error":"Total shared amount more than total"}, status = status.HTTP_400_BAD_REQUEST)
 
+        
         event = Event.objects.create(
             name = name,
-            occasion = occasions,
+            occasion = occasion,
             created_by = request.user,
             expender = expender,
             total_amount = total_amount
@@ -158,7 +164,7 @@ class EventViewSet(viewsets.ViewSet):
             "data":{
                 "id":event.id,
                 "name":event.name,
-                "occassion":event.occasion.id,
+                "occassion":occasion_id,
                 "total_amount":event.total_amount,
                 "expender":expender.id,
                 "utilizers":utilizers_data
