@@ -3,40 +3,68 @@
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-from .models import CustomUser
-from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 
-class UserTests(APITestCase):
+User = get_user_model()
+
+class AuthenticationTests(APITestCase):
 
     def setUp(self):
-        self.register_url = reverse('register')
-        self.login_url = reverse('login')
-        self.refresh_url = reverse('token_refresh')
-        self.me_url = reverse('user_detail')
-        self.update_url = reverse('user_detail')
-        self.password_change_url = reverse('password_change')  
-        self.user_data = {
-            'email': 'newuser@example.com',  
-            'password': 'testpassword123',
-            'first_name': 'Test',
-            'last_name': 'User'
-        }
-        self.user = CustomUser.objects.create_user(
-            email='existinguser@example.com',  
+        self.user = User.objects.create_user(
+            email='testuser@example.com',  
             password='testpassword123',
-            first_name='Existing',
+            first_name='Test',
             last_name='User'
         )
-
+        self.register_url = reverse('auth-register')
+        self.login_url = reverse('auth-login')
+        self.refresh_url = reverse('auth-refresh-token')
+        self.logout_url = reverse('auth-logout')
+       
+     
     def test_register_user(self):
         """test creating a user is successfull"""
-        response = self.client.post(self.register_url, self.user_data, format='json')
+        data = {
+            "email": "test4@gmail.com",
+            "first_name": "",
+            "last_name": "",
+            "password": "testpass123"
+        }
+        response = self.client.post(self.register_url, data, format='json')
         print(response.data)  
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(CustomUser.objects.count(), 2)  
-        self.assertEqual(CustomUser.objects.get(email=self.user_data['email']).email, self.user_data['email'])
+        self.assertEqual(response.data["message"], "User Registered Successfully")  
+        self.assertEqual(User.objects.filter(email = data['email']).exists(), True)
 
-    def test_login_user(self):
+
+    def test_register_without_optional_fields(self):
+        "Test register without optional fields"
+
+        data = {
+            "email":"dummy@example.com",
+            "password":"testpass123"
+        }
+
+        response = self.client.post(self.register_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(email = data['email'])
+        self.assertEqual(user.first_name , '')
+        self.assertEqual(user.last_name , '')
+
+
+    def test_register_invalid(self):
+        "Test register without email"
+        data = {
+            "password":"testpass123"
+        }
+
+        response = self.client.post(self.register_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+
+
+    def test_login_success(self):
         """Test login a user"""
         response = self.client.post(self.login_url, {
             'email': self.user.email,  
@@ -47,7 +75,16 @@ class UserTests(APITestCase):
         self.assertIn('access', response.data)
         self.assertIn('refresh', response.data)
 
+    def test_login_failure(self):
+        """Test login a user"""
+        response = self.client.post(self.login_url, {
+            'email': self.user.email,  
+            'password': 'testpassword'  
+        }, format='json')
+        print(response.data)  
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+     
     def test_token_refresh(self):
         """Test refresh token"""
         refresh = RefreshToken.for_user(self.user)
@@ -55,41 +92,83 @@ class UserTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('access', response.data)
 
-    def test_get_user_details(self):
-        """Test for retreiving user details"""
-        self.client.force_authenticate(user=self.user)
-        response = self.client.get(self.me_url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['email'], self.user.email)
-        self.assertEqual(response.data['first_name'], self.user.first_name)
-        self.assertEqual(response.data['last_name'], self.user.last_name)
 
-    def test_get_user_details_unauthenticated(self):
-        """Test for unauthorized user access"""
-        response = self.client.get(self.me_url)
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+    def test_token_refresh_invalid(self):
+        """Test refresh token"""
+        response = self.client.post(self.refresh_url, {'refresh': "Invalid toekn"}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_update_user_details(self):
-        """Test for update user profile"""
-        self.client.force_authenticate(user=self.user)
-        update_data = {
-            'first_name': 'Updated',
-            'last_name': 'User'
+
+    def test_logout_success(self):
+        "Logout with valid refresh token"
+        refresh = RefreshToken.for_user(self.user)
+        print("refresh", refresh)
+        data = {
+            "refresh":str(refresh)
         }
-        response = self.client.put(self.update_url, update_data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.user.refresh_from_db()
-        self.assertEqual(self.user.first_name, update_data['first_name'])
-        self.assertEqual(self.user.last_name, update_data['last_name'])
 
-    def test_change_password(self):
-        """Test for change password"""
-        self.client.force_authenticate(user=self.user)
-        password_data = {
-            'old_password': 'testpassword123',
-            'new_password': 'newpassword123'
+        response = self.client.post(self.logout_url, data, format='json')
+        print("response", response.json())
+        self.assertEqual(response.status_code,  status.HTTP_200_OK)
+        self.assertEqual(response.data["message"], "successfully logged out")
+
+
+
+    def test_logout_failure(self):
+        "Logout with valid refresh token"
+        data = {
+            "refresh":"invalidetoken"
         }
-        response = self.client.put(self.password_change_url, password_data, format='json')
+
+        response = self.client.post(self.logout_url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+  
+
+
+class UserViewTest(APITestCase):
+    def setUp(self):
+        self.user1 = User.objects.create_user(
+            email = "user1@example.com",
+            password = "testpass123",
+            first_name = "Rishita",
+            last_name = "khandelwal"
+        )
+
+        self.user2 = User.objects.create_user(
+            email = "user2@example.com",
+            password = "testpass123",
+            first_name = "Rishi",
+            last_name = "khandelwal"
+        )
+
+        self.access_token = str(AccessToken.for_user(self.user1))
+        self.client.credentials(HTTP_AUTHORIZATION = f'Bearer {self.access_token}')
+
+        self.list_url = reverse('users-list')
+        # self.retrieve_url = lambda pk:reverse('users-detail', args=['pk'])
+        self.retrieve_url = reverse('users-detail', args=[self.user1.id])
+
+
+    def test_list_users(self):
+        "Test getting list of all the users"
+        response = self.client.get(self.list_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.user.refresh_from_db()
-        self.assertTrue(self.user.check_password(password_data['new_password']))
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data[0]['email'], self.user1.email)
+        self.assertEqual(response.data[1]['email'], self.user2.email)
+
+
+    def test_retrieve_user_success(self):
+        "Test reteriving a valid user by ID"
+        response = self.client.get(self.retrieve_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['email'], self.user1.email)
+
+
+    def test_retrieve_user_not_found(self):
+        "Test reteriving a valid user by ID"
+        self.retrieve_url = reverse('users-detail', args=[9999])
+        response = self.client.get(self.retrieve_url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data, {'Error':"user not found"})
+

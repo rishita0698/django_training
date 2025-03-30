@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.decorators import action
 from django.db.models import Sum
 from users.models import CustomUser
+from django.db import transaction
 
 class OccasionManagementView(viewsets.ViewSet):
     """View for Managing Occassion related operation respect to the user"""
@@ -267,8 +268,26 @@ class EventViewSet(viewsets.ViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
     
 
+    @action(detail=True, methods=['get'])
+    def payments(self, requesr, pk=None):
+        event = get_object_or_404(Event, id = pk)
+        payments = Payment.objects.filter(event_id = event.id)
+        serializer = PaymentSerializer(payments, many=True)
+        return Response(serializer.data, status = status.HTTP_200_OK)    
+
 class PaymentViewSet(viewsets.ViewSet):
     """View for clearing payment of a user related to an event"""
+
+    def list(self, request):
+        """Returns payment made and received by the user for all events"""
+        user = request.user
+
+        payment_made = Payment.objects.filter(payer= user)
+        payment_received = Payment.objects.filter(payee = user)
+
+        payments = payment_made | payment_received
+        serializer = PaymentSerializer(payments, many = True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
             request_body=PaymentSerializer,
@@ -276,7 +295,7 @@ class PaymentViewSet(viewsets.ViewSet):
     )
     @action(detail=False, methods=['post'])
     def clear_expense(self, request,pk=None):
-        """clear all the expense"""
+        """Clear an expense for an event"""
         payer_id = request.data.get('payer')
         payee_id = request.data.get('payee')
         event_id = request.data.get('event')
@@ -299,7 +318,8 @@ class PaymentViewSet(viewsets.ViewSet):
             return Response({"error":"Payer was not part of Event"}, status = status.HTTP_404_NOT_FOUND)
 
 
-        total_due = Utlizers.objects.filter(event = event, utlizer_id = payee_id).aggregate(total = Sum('amount'))['total'] or 0
+        # total_due = Utlizers.objects.filter(event = event, utlizer_id = payee_id).aggregate(total = Sum('amount'))['total'] or 0
+        total_due = utilizer.amount
         total_paid = Payment.objects.filter(event = event, payer_id = payer_id,payee_id = payee_id).aggregate(total = Sum('amount'))['total'] or 0
 
 
