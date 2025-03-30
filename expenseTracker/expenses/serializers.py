@@ -24,7 +24,6 @@ class EventSerializer(serializers.ModelSerializer):
 class UtlizersSerializer(serializers.ModelSerializer):
     """serializer for the Utilizers object"""
     id = serializers.IntegerField(read_only = True)
-    # event = serializers.IntegerFie(read_only = True)
     class Meta:
         model = Utlizers
         fields = ["id","utlizer","amount"]
@@ -44,7 +43,6 @@ class EventUtilizerSerializer(serializers.ModelSerializer):
 class PaymentSerializer(serializers.ModelSerializer):
     """serializer for the Payment object"""
     id = serializers.IntegerField(read_only = True)
-    # event = serializers.IntegerFie(read_only = True)
     class Meta:
         model = Payment
         fields = ["id","event","payer","payee","amount"]

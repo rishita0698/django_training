@@ -11,6 +11,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
 class AuthViewSet(viewsets.ViewSet):
+    """View for User Auth"""
     permission_classes = [permissions.AllowAny]
 
     @swagger_auto_schema(
@@ -19,6 +20,7 @@ class AuthViewSet(viewsets.ViewSet):
     )
     @action(detail = False, methods = ['post'])
     def register(self, request):
+        """Create a new user/user signup"""
         serializer = CustomUserSerializer(data = request.data)
         if serializer.is_valid():
             serializer.save()
@@ -32,6 +34,7 @@ class AuthViewSet(viewsets.ViewSet):
     )
     @action(detail = False, methods=['post'])
     def login(self, request):
+        """Login the existing user"""
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data
@@ -60,6 +63,7 @@ class AuthViewSet(viewsets.ViewSet):
     )
     @action(detail = False, methods = ['post'])
     def refresh_token(self, request):
+        """Create new access token from refresh token"""
         try:
             refresh_token = request.data.get('refresh')
             if not refresh_token:
@@ -81,6 +85,7 @@ class AuthViewSet(viewsets.ViewSet):
     )
     @action(detail = False, methods = ['post'])
     def logout(self, request):
+        """User logout view"""
         try:
             refresh_token = request.data.get('refresh')
             token = RefreshToken(refresh_token)
@@ -92,14 +97,16 @@ class AuthViewSet(viewsets.ViewSet):
 
 
 class UserViewSet(viewsets.ViewSet):
-
+    """View for the user details"""
     def list(self, request):
+        """List all the users"""
         users = CustomUser.objects.all()
         serialize = CustomUserSerializer(users, many = True)
         return Response(serialize.data, status=status.HTTP_200_OK)
     
 
     def retrieve(self, request, pk=None):
+        """Get Existing user details"""
         try:
             user = CustomUser.objects.get(pk=pk)
             serialize = CustomUserSerializer(user)

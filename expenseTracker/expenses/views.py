@@ -14,7 +14,7 @@ from users.models import CustomUser
 from django.db import transaction
 
 class OccasionManagementView(viewsets.ViewSet):
-    """View for Managing Occassion related operation respect to the user"""
+    """View for Managing Occassion related operation"""
     permission_classes = [permissions.IsAuthenticated,]
     
 
@@ -29,6 +29,7 @@ class OccasionManagementView(viewsets.ViewSet):
             responses={201:OccasionSerializer()}
     )
     def create(self, request):
+        """Create an occassion"""
         print("request_body", request.data)
         serializer = OccasionSerializer(data = request.data)
         if serializer.is_valid():
@@ -47,6 +48,7 @@ class OccasionManagementView(viewsets.ViewSet):
             responses={200:OccasionSerializer()}
     )
     def update(self, request, pk=None):
+        """Update an existing Occassion"""
         occasions = get_object_or_404(Occasion, pk=pk, created_by = request.user)
         serializer = OccasionSerializer(occasions, data = request.data)
         if serializer.is_valid():
@@ -55,6 +57,7 @@ class OccasionManagementView(viewsets.ViewSet):
         return Response(serializer.errors, status = status.HTTP_400_BAD_REQUEST)
     
     def destroy(self, request, pk=None):
+        """Delete an Existing Occassion"""
         occasions = get_object_or_404(Occasion, pk=pk, created_by = request.user)
         if occasions:
             events = Event.objects.filter(occasion=occasions)
@@ -64,7 +67,7 @@ class OccasionManagementView(viewsets.ViewSet):
         return Response({"message":"occassion deleted successfully"}, status = status.HTTP_204_NO_CONTENT)
 
     def retrieve(self, request, pk=None):
-        """list all the events within an occassion"""
+        """Get an occassion summary with event and expenditure"""
         try:
             occasion = Occasion.objects.get(pk=pk)
         except Occasion.DoesNotExist:
@@ -115,6 +118,7 @@ class EventViewSet(viewsets.ViewSet):
             responses={200:OccasionSerializer()}
     )
     def create(self, request):
+        """Create an event with utilizers"""
         occasion_id = request.data.get('occasion')
         name = request.data.get('name')
         expender = request.data.get('expender')
@@ -173,7 +177,7 @@ class EventViewSet(viewsets.ViewSet):
         }, status=status.HTTP_200_OK)
 
     def retrieve(self, request, pk=None):
-        """list all the participants within an Event"""
+        """Get event detail with it's all utilizers"""
         try:
             event = Event.objects.get(pk=pk)
         except Event.DoesNotExist:
@@ -204,6 +208,7 @@ class EventViewSet(viewsets.ViewSet):
             responses={200:OccasionSerializer()}
     )
     def update(self, request, pk=None):
+        """Update existing event with utilizers"""
         occasion_id = request.data.get('occasion')
         print("occasion_id",occasion_id)
         name = request.data.get('name')
@@ -270,6 +275,7 @@ class EventViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['get'])
     def payments(self, requesr, pk=None):
+        """Get all the payment list for an event"""
         event = get_object_or_404(Event, id = pk)
         payments = Payment.objects.filter(event_id = event.id)
         serializer = PaymentSerializer(payments, many=True)

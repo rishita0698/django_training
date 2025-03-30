@@ -21,15 +21,9 @@ class CustomUserSerializer(serializers.ModelSerializer):
         )
         return user
 
-class UserSerializer(serializers.ModelSerializer):
-    """serializer for the get/update user object"""
-    class Meta:
-        model = CustomUser
-        fields = ['id', 'email', 'first_name', 'last_name']
-        read_only_fields = ['id', 'email']  # Make 'id' and 'email' read-only
-
 
 class LoginSerializer(serializers.Serializer):
+    """Serializer for login"""
     email = serializers.CharField()
     password = serializers.CharField(write_only=True)
 
@@ -39,24 +33,3 @@ class LoginSerializer(serializers.Serializer):
             return user
         raise serializers.ValidationError("Invalid credentials")
         
-
-class PasswordChangeSerializer(serializers.Serializer):
-    """serializer for the user password change"""
-    old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True)
-
-    def validate_old_password(self, value):
-        user = self.context['request'].user
-        if not user.check_password(value):
-            raise serializers.ValidationError("Old password is not correct")
-        return value
-
-    def validate_new_password(self, value):
-        # Add any password validation logic here if needed
-        return value
-
-    def save(self, **kwargs):
-        user = self.context['request'].user
-        user.set_password(self.validated_data['new_password'])
-        user.save()
-        return user

@@ -17,8 +17,9 @@ class UtlizersAdmin(admin.ModelAdmin):
     list_display = ["id","event", "utlizer", "amount"]
 
 class PaymentAdmin(admin.ModelAdmin):
-    """define the admin pages for Utilizers"""
+    """define the admin pages for Payment"""
     list_display = ["id","payer", "payee", "event","amount"]
+
 
 admin.site.register(Occasion, OccassionAdmin)
 admin.site.register(Event, EventAdmin)

@@ -24,7 +24,7 @@ class AuthenticationTests(APITestCase):
        
      
     def test_register_user(self):
-        """test creating a user is successfull"""
+        """Test creating a user is successfull"""
         data = {
             "email": "test4@gmail.com",
             "first_name": "",
@@ -94,7 +94,7 @@ class AuthenticationTests(APITestCase):
 
 
     def test_token_refresh_invalid(self):
-        """Test refresh token"""
+        """Test refresh token invalid"""
         response = self.client.post(self.refresh_url, {'refresh': "Invalid toekn"}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -115,7 +115,7 @@ class AuthenticationTests(APITestCase):
 
 
     def test_logout_failure(self):
-        "Logout with valid refresh token"
+        "Logout with invalid refresh token"
         data = {
             "refresh":"invalidetoken"
         }
@@ -166,7 +166,7 @@ class UserViewTest(APITestCase):
 
 
     def test_retrieve_user_not_found(self):
-        "Test reteriving a valid user by ID"
+        "Test reteriving a valid user by non existing ID"
         self.retrieve_url = reverse('users-detail', args=[9999])
         response = self.client.get(self.retrieve_url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
