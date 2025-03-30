@@ -404,14 +404,17 @@ class PaymentViewSet(viewsets.ViewSet):
             return Response({"error":"Event not found"}, status = status.HTTP_404_NOT_FOUND)
         
 
-        try:
-            utilizer = Utlizers.objects.get(event = event, utlizer = payee_id)
-        except Utlizers.DoesNotExist:
-            return Response({"error":"Payer was not part of Event"}, status = status.HTTP_404_NOT_FOUND)
+        payer_utlilizer = Utlizers.objects.filter(event=event, utlizer = payer_id).exists()
+        payee_utlilizer = Utlizers.objects.filter(event=event, utlizer = payee_id).exists()
 
-
+        if not payer_utlilizer:
+            return Response({"error":"Payer was not part of event"}, status = status.HTTP_400_BAD_REQUEST)
+        
+        if not payee_utlilizer:
+            return Response({"error":"Payer was not part of event"}, status = status.HTTP_400_BAD_REQUEST)
+        
         # total_due = Utlizers.objects.filter(event = event, utlizer_id = payee_id).aggregate(total = Sum('amount'))['total'] or 0
-        total_due = utilizer.amount
+        total_due = Utlizers.objects.get(event = event, utlizer = payer_id).amount
         total_paid = Payment.objects.filter(event = event, payer_id = payer_id,payee_id = payee_id).aggregate(total = Sum('amount'))['total'] or 0
 
 
