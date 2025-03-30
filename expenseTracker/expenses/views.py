@@ -1,7 +1,13 @@
 from django.shortcuts import render
 
 # Create your views here.
-from .serializers import OccasionSerializer,EventSerializer, PaymentSerializer,EventUtilizerSerializer
+from .serializers import (
+    OccasionSerializer,
+    EventSerializer, 
+    PaymentSerializer,
+    EventUtilizerSerializer,
+    UtlizersCreateSerializer
+)
 from .models import Occasion, Event, Utlizers, Payment
 from rest_framework import viewsets, permissions, status
 from drf_yasg import openapi
@@ -65,8 +71,9 @@ class OccasionManagementView(viewsets.ViewSet):
                 event.delete()
         occasions.delete()
         return Response({"message":"occassion deleted successfully"}, status = status.HTTP_204_NO_CONTENT)
-
-    def retrieve(self, request, pk=None):
+    
+    @action(detail=True, methods=['get'])
+    def occassion_summary(self, request, pk=None):
         """Get an occassion summary with event and expenditure"""
         try:
             occasion = Occasion.objects.get(pk=pk)
@@ -153,17 +160,20 @@ class EventViewSet(viewsets.ViewSet):
         )
         
         print("event========>", event)
-        created_utilizers = []
-        for utilizer_user in utilizers_data:
-            user_id = utilizer_user.get('utlizer')
-            user_amount = utilizer_user.get('amount')
-            try:
-                user = CustomUser.objects.get(id=user_id)
-            except CustomUser.DoesNotExist:
-                return Response({"error":f"User with {user_id} not found"}, status = status.HTTP_404_NOT_FOUND)
 
-            utilizer = Utlizers.objects.create(event=event, utlizer=user, amount=user_amount)
-            created_utilizers.append(utilizer)
+        created_utilizers = []
+        if utilizers_data:
+            for utilizer_user in utilizers_data:
+                user_id = utilizer_user.get('utlizer')
+                user_amount = utilizer_user.get('amount')
+                try:
+                    user = CustomUser.objects.get(id=user_id)
+                except CustomUser.DoesNotExist:
+                    return Response({"error":f"User with {user_id} not found"}, status = status.HTTP_404_NOT_FOUND)
+
+                utilizer = Utlizers.objects.create(event=event, utlizer=user, amount=user_amount)
+                created_utilizers.append(utilizer)
+
         return Response({
             "message":"Event with Expenditure created successfully",
             "data":{
@@ -280,6 +290,37 @@ class EventViewSet(viewsets.ViewSet):
         payments = Payment.objects.filter(event_id = event.id)
         serializer = PaymentSerializer(payments, many=True)
         return Response(serializer.data, status = status.HTTP_200_OK)    
+
+class UtilizerViewSet(viewsets.ViewSet):
+    """View for creating utilizers """
+    permission_classes = [permissions.IsAuthenticated,]
+
+    @swagger_auto_schema(
+        request_body=UtlizersCreateSerializer(many=True),
+        responses={200: OccasionSerializer(many=True)}
+    )
+    def create(self, request):
+        utilizers_data = request.data
+        print("utilizers_data=================>",utilizers_data)
+        if not isinstance(utilizers_data, list):
+            return Response({'error': 'Expected a list of utilizers'}, status=status.HTTP_400_BAD_REQUEST)
+
+        for utilizer_data in utilizers_data:
+            event_id = utilizer_data.get('event')  # Ensure this field is present in each utilizer data
+            if not event_id:
+                return Response({'error': 'event_id is required for each utilizer'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                event = Event.objects.get(id=event_id)
+                Utlizers.objects.filter(event=event).delete()
+                # utilizer_data['event'] = event_id
+            except Event.DoesNotExist:
+                return Response({'error': f'Event with id {event_id} not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UtlizersCreateSerializer(data=utilizers_data, many=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PaymentViewSet(viewsets.ViewSet):
     """View for clearing payment of a user related to an event"""

@@ -28,6 +28,13 @@ class UtlizersSerializer(serializers.ModelSerializer):
         model = Utlizers
         fields = ["id","utlizer","amount"]
 
+class UtlizersCreateSerializer(serializers.ModelSerializer):
+    """serializer for the Utilizers object"""
+    id = serializers.IntegerField(read_only = True)
+    class Meta:
+        model = Utlizers
+        fields = ["id","utlizer","amount","event"]
+
 
 class EventUtilizerSerializer(serializers.ModelSerializer):
     """serializer for the Event utilizer object"""
