@@ -92,19 +92,52 @@ class OccasionManagementView(viewsets.ViewSet):
                     "event_id":event.id,
                     "event_name":event.name,
                     "total_spent":event.total_amount,
-                    'expender':event.expender.email,
+                    'expender':event.expender.id,
                     'utilizer_details':list(utilizer_details)
                 }
             )
 
             total_expenditure = total_expenditure+event.total_amount
+            print("total_expenditure===============>",total_expenditure)
+        balances = []
 
+        users = Utlizers.objects.filter(event__in = events).values('utlizer').distinct()
+        for user in users:
+            user_id = user['utlizer']
+            total_paid = Event.objects.filter(occasion = occasion, expender_id = user_id).aggregate(total = Sum('total_amount'))['total'] or 0
+            total_share = Utlizers.objects.filter(event__in = events, utlizer = user_id).aggregate(total = Sum('amount'))['total'] or 0
+            
+            #payment received
+            received_payment = Payment.objects.filter(payee = user_id,event__in = events).aggregate(total = Sum('amount'))['total'] or 0
+
+            #Amount user paid to others 
+            sent_payment = Payment.objects.filter(payer = user_id,event__in = events).aggregate(total = Sum('amount'))['total'] or 0
+
+
+            balance = (total_paid - total_share) + (sent_payment - received_payment)
+            try:
+                user_obj = CustomUser.objects.get(id = user_id)
+            except CustomUser.DoesNotExist:
+                continue
+
+            balances.append(
+                {
+                    "user":user_obj.id,
+                    "email":user_obj.email,
+                    "total_paid":total_paid,
+                    "total_share":total_share,
+                    "received_payment":received_payment,
+                    "sent_payments":sent_payment,
+                    "balance":balance
+                }
+            )
         return Response(
             {
                 'id':occasion.id,
                 'occassion_name':occasion.name,
                 'total_expenditure':total_expenditure,
-                "events":event_data
+                "events":event_data,
+                "balances":balances
             }
         )
 
@@ -150,7 +183,7 @@ class EventViewSet(viewsets.ViewSet):
         if total_utilizer_amount > int(total_amount):
             return Response({"error":"Total shared amount more than total"}, status = status.HTTP_400_BAD_REQUEST)
 
-        
+
         event = Event.objects.create(
             name = name,
             occasion = occasion,
@@ -172,8 +205,20 @@ class EventViewSet(viewsets.ViewSet):
                     return Response({"error":f"User with {user_id} not found"}, status = status.HTTP_404_NOT_FOUND)
 
                 utilizer = Utlizers.objects.create(event=event, utlizer=user, amount=user_amount)
-                created_utilizers.append(utilizer)
+                created_utilizers.append({
+                    "id":user_id,
+                    "amount":utilizer.amount
+                })
 
+        # Handle expender contribution if necessary
+        if total_utilizer_amount < int(total_amount):
+            expender_contribution = int(total_amount) - total_utilizer_amount
+            utilizer = Utlizers.objects.create(event=event, utlizer=expender, amount=expender_contribution)
+            created_utilizers.append({
+                    "id":expender.id,
+                    "amount":str(utilizer.amount)
+                })
+            
         return Response({
             "message":"Event with Expenditure created successfully",
             "data":{
@@ -182,7 +227,7 @@ class EventViewSet(viewsets.ViewSet):
                 "occassion":occasion_id,
                 "total_amount":event.total_amount,
                 "expender":expender.id,
-                "utilizers":utilizers_data
+                "utilizers":created_utilizers
             },
         }, status=status.HTTP_200_OK)
 
