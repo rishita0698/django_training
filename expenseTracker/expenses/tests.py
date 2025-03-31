@@ -15,11 +15,13 @@ class BaseTestCase(APITestCase):
         # Set up the test environment
         self.client = APIClient()
         self.user = User.objects.create_user(email='test@example.com', password='testpassword')
+        self.user2 = User.objects.create_user(email='test1@example.com', password='testpassword')
         self.client.force_authenticate(user=self.user)
         self.occasion = Occasion.objects.create(name='Birthday Party', created_by=self.user)
         self.event = Event.objects.create(name='Cake Cutting', occasion=self.occasion, total_amount=100, expender=self.user, created_by=self.user)
         self.utilizer = Utlizers.objects.create(event=self.event, utlizer=self.user, amount=50)
-        self.payment = Payment.objects.create(payer=self.user, payee=self.user, event=self.event, amount=50)
+        self.utilizer = Utlizers.objects.create(event=self.event, utlizer=self.user2, amount=50)
+        self.payment = Payment.objects.create(payer=self.user2, payee=self.user, event=self.event, amount=10)
 
 
 class OccasionManagementViewTests(BaseTestCase):
@@ -58,7 +60,7 @@ class OccasionManagementViewTests(BaseTestCase):
 
     def test_occasion_summary(self):
         # Test retrieving the summary of an occasion
-        url = reverse('occassion-occassion-summary', args=[self.occasion.id])
+        url = reverse('occassion-summary', args=[self.occasion.id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['total_expenditure'], 100)
@@ -94,7 +96,7 @@ class OccasionManagementViewTests(BaseTestCase):
 
     def test_occasion_summary_nonexistent_occasion(self):
         # Test retrieving the summary of a non-existent occasion
-        url = reverse('occassion-occassion-summary', args=[999])  # Non-existent occasion ID
+        url = reverse('occassion-summary', args=[999])  # Non-existent occasion ID
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
@@ -132,7 +134,7 @@ class OccasionManagementViewTests(BaseTestCase):
     def test_occasion_summary_unauthenticated(self):
         # Test retrieving the summary of an occasion without authentication
         self.client.force_authenticate(user=None)  # Unauthenticate the client
-        url = reverse('occassion-occassion-summary', args=[self.occasion.id])
+        url = reverse('occassion-summary', args=[self.occasion.id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -372,22 +374,23 @@ class PaymentViewSetTests(BaseTestCase):
         self.assertEqual(len(response.data), 1)
 
 
-    #this is not working
-    # def test_clear_expense(self):
-    #     # Test clearing an expense for an event
-    #     clear_expense_url = reverse('payment-clear-expense')
-    #     data = {
-    #         'payer': self.user.id,
-    #         'payee': self.user.id,
-    #         'event': self.event.id,
-    #         'amount': 25
-    #     }
+    def test_clear_expense(self):
+        # Test clearing an expense for an event
+        clear_expense_url = reverse('payment-clear-expense')
+        print('user2', self.user2.id)
+        print('user1', self.user.id)
+        data = {
+            'payer': self.user2.id,
+            'payee': self.user.id,
+            'event': self.event.id,
+            'amount': 25
+        }
 
-    #     print("data==============>", data)
-    #     response = self.client.post(clear_expense_url, data, format='json')
-    #     print("response===================>", response.json())
-    #     self.assertEqual(response.status_code, status.HTTP_200_OK)
-    #     self.assertEqual(response.data['data']['amount'], 25)
+        print("data==============>", data)
+        response = self.client.post(clear_expense_url, data, format='json')
+        print("response===================>", response.json())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['data']['amount'], '25.00')
 
   
     # # Failure Test Cases
@@ -396,7 +399,7 @@ class PaymentViewSetTests(BaseTestCase):
         # Test clearing an expense with missing required fields
         clear_expense_url = reverse('payment-clear-expense')
         data = {
-            'payer': self.user.id,
+            'payer': self.user2.id,
             'payee': self.user.id,
             'event': self.event.id
             # Missing 'amount'
@@ -408,7 +411,7 @@ class PaymentViewSetTests(BaseTestCase):
         # Test clearing an expense with an invalid event ID
         clear_expense_url = reverse('payment-clear-expense')
         data = {
-            'payer': self.user.id,
+            'payer': self.user2.id,
             'payee': self.user.id,
             'event': 999,  # Non-existent event ID
             'amount': 25
@@ -427,25 +430,26 @@ class PaymentViewSetTests(BaseTestCase):
             'amount': 25
         }
         response = self.client.post(clear_expense_url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_clear_expense_with_no_outstanding_balance(self):
         # Test clearing an expense with no outstanding balance
         clear_expense_url = reverse('payment-clear-expense')
         data = {
-            'payer': self.user.id,
+            'payer': self.user2.id,
             'payee': self.user.id,
             'event': self.event.id,
             'amount': 50  # No outstanding balance to clear
         }
         response = self.client.post(clear_expense_url, data, format='json')
+        print("response===========>", response.json())
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_clear_expense_with_exceeding_amount(self):
         # Test clearing an expense with an amount exceeding the balance due
         clear_expense_url = reverse('payment-clear-expense')
         data = {
-            'payer': self.user.id,
+            'payer': self.user2.id,
             'payee': self.user.id,
             'event': self.event.id,
             'amount': 100  # Amount exceeds balance due
@@ -465,7 +469,7 @@ class PaymentViewSetTests(BaseTestCase):
         clear_expense_url = reverse('payment-clear-expense')
         self.client.force_authenticate(user=None)  # Unauthenticate the client
         data = {
-            'payer': self.user.id,
+            'payer': self.user2.id,
             'payee': self.user.id,
             'event': self.event.id,
             'amount': 25

@@ -43,11 +43,10 @@ class OccasionManagementView(viewsets.ViewSet):
             return Response(serializer.data, status = status.HTTP_201_CREATED )
         return Response(serializer.errors, status = status. HTTP_400_BAD_REQUEST)
     
-
-    # def retrieve(self, request, pk=None):
-    #     occasions = get_object_or_404(Occasion, pk=pk, created_by = request.user)
-    #     serializer = OccasionSerializer(occasions)
-    #     return Response (serializer.data)
+    def retrieve(self, request, pk=None):
+        occasions = get_object_or_404(Occasion, pk=pk, created_by = request.user)
+        serializer = OccasionSerializer(occasions)
+        return Response (serializer.data)
     
     @swagger_auto_schema(
             request_body=OccasionSerializer,
@@ -73,7 +72,7 @@ class OccasionManagementView(viewsets.ViewSet):
         return Response({"message":"occassion deleted successfully"}, status = status.HTTP_204_NO_CONTENT)
     
     @action(detail=True, methods=['get'])
-    def occassion_summary(self, request, pk=None):
+    def summary(self, request, pk=None):
         """Get an occassion summary with event and expenditure"""
         try:
             occasion = Occasion.objects.get(pk=pk)
@@ -232,14 +231,23 @@ class EventViewSet(viewsets.ViewSet):
         }, status=status.HTTP_200_OK)
 
     def retrieve(self, request, pk=None):
+        try:
+            event = Event.objects.get(pk=pk)
+        except Event.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        serializer = EventSerializer(event)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def participants(self, request, pk=None):
         """Get event detail with it's all utilizers"""
         try:
             event = Event.objects.get(pk=pk)
         except Event.DoesNotExist:
             return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        utilizers = Utlizers.objects.filter(event = event).values_list("utlizer__email", flat = True)
-        participants = list(set([event.expender.email] + list(utilizers)))
+        utilizers = Utlizers.objects.filter(event = event).values_list("utlizer__id", flat = True)
+        participants = list(set([event.expender.id] + list(utilizers)))
         print("event", event.name)
         try:
             print(event.occasion)
@@ -413,6 +421,10 @@ class PaymentViewSet(viewsets.ViewSet):
         if not payee_utlilizer:
             return Response({"error":"Payer was not part of event"}, status = status.HTTP_400_BAD_REQUEST)
         
+        if payee_id == payer_id:
+            return Response({"message":"Self-payment does not need to cleared"}, status=status.HTTP_200_OK)
+        
+
         # total_due = Utlizers.objects.filter(event = event, utlizer_id = payee_id).aggregate(total = Sum('amount'))['total'] or 0
         total_due = Utlizers.objects.get(event = event, utlizer = payer_id).amount
         total_paid = Payment.objects.filter(event = event, payer_id = payer_id,payee_id = payee_id).aggregate(total = Sum('amount'))['total'] or 0
