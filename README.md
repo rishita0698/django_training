@@ -35,6 +35,8 @@ With Expense Splitter, managing group finances becomes hassle-free, ensuring fai
 ## Database Schema
 The application follows the given schema:
 
+```
+sql
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     first_name VARCHAR(255) NOT NULL,
@@ -79,7 +81,7 @@ CREATE TABLE payments (
     amount DECIMAL(10,2) NOT NULL,
     paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
+```
 
 ## Installation
 ### Prerequisites
